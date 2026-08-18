@@ -9,17 +9,13 @@ from .database import (
 )
 from .models import Product
 from .schemas.product import ProductCreate
+from .models import Evidence, Product
+from .schemas.product import EvidenceCreate, ProductCreate
 
 app = FastAPI(
     title="Industrial Product Intelligence API",
     version="0.1.0",
 )
-
-
-@app.on_event("startup")
-def startup():
-    initialize_database()
-
 
 @app.get("/health")
 def health_check():
@@ -96,5 +92,24 @@ def create_product(
     return {
         "id": product.id,
         "name": product.name,
+        "status": "created",
+    }
+
+@app.post("/evidence")
+def create_evidence(
+    evidence_data: EvidenceCreate,
+    session: Session = Depends(get_session),
+):
+    evidence = Evidence(
+        **evidence_data.model_dump(mode="json"),
+    )
+
+    session.add(evidence)
+    session.commit()
+    session.refresh(evidence)
+
+    return {
+        "id": evidence.id,
+        "product_id": evidence.product_id,
         "status": "created",
     }
