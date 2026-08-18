@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-
+from sqlalchemy import select
 from .database import (
     check_database_connection,
     get_session,
@@ -35,6 +35,52 @@ def database_health_check():
 
     return {"status": "ok", "database": "connected"}
 
+@app.get("/products")
+def list_products(
+    session: Session = Depends(get_session),
+):
+    products = session.scalars(
+        select(Product).order_by(Product.id)
+    ).all()
+
+    return [
+        {
+            "id": product.id,
+            "brand": product.brand,
+            "model": product.model,
+            "name": product.name,
+            "category": product.category,
+            "description": product.description,
+            "specifications": product.specifications,
+            "source_urls": product.source_urls,
+            "created_at": product.created_at,
+        }
+        for product in products
+    ]
+
+@app.get("/products/{product_id}")
+def get_product(
+    product_id: int,
+    session: Session = Depends(get_session),
+):
+    product = session.scalar(
+        select(Product).where(Product.id == product_id)
+    )
+
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return {
+        "id": product.id,
+        "brand": product.brand,
+        "model": product.model,
+        "name": product.name,
+        "category": product.category,
+        "description": product.description,
+        "specifications": product.specifications,
+        "source_urls": product.source_urls,
+        "created_at": product.created_at,
+    }
 
 @app.post("/products")
 def create_product(
