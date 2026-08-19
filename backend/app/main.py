@@ -113,3 +113,28 @@ def create_evidence(
         "product_id": evidence.product_id,
         "status": "created",
     }
+
+@app.get("/products/{product_id}/evidence")
+def list_product_evidence(
+    product_id: int,
+    session: Session = Depends(get_session),
+):
+    evidence_records = session.scalars(
+        select(Evidence)
+        .where(Evidence.product_id == product_id)
+        .order_by(Evidence.id)
+    ).all()
+
+    return [
+        {
+            "id": evidence.id,
+            "product_id": evidence.product_id,
+            "field_name": evidence.field_name,
+            "value": evidence.value,
+            "source_url": evidence.source_url,
+            "confidence": evidence.confidence,
+            "extraction_method": evidence.extraction_method,
+            "created_at": evidence.created_at,
+        }
+        for evidence in evidence_records
+    ]
