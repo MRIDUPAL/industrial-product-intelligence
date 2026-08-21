@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -20,6 +20,7 @@ from .schemas.product import (
     ProductCreate,
 )
 from .services.ingestion import fetch_page
+from .services.gemini_extractor import GeminiExtraction, extract_pdf
 
 app = FastAPI(
     title="Industrial Product Intelligence API",
@@ -175,3 +176,29 @@ async def ingest_preview(request: IngestPreviewRequest):
         "character_count": len(page["text"]),
         "text_preview": page["text"][:1000],
     }
+
+@app.post("/ai/extract-pdf", response_model=GeminiExtraction)
+async def extract_pdf_endpoint(
+    file: UploadFile = File(...),
+):
+    if file.content_type != "application/pdf":
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are supported",
+        )
+
+    pdf_bytes = await file.read()
+
+    try:
+        return extract_pdf(pdf_bytes)
+    except RuntimeError as error:
+        raise HTTPException(status_code=500, detail=str(error))
+    except Exception as error:
+        print(
+            f"Gemini extraction failed: "
+            f"{type(error).__name__}: {error}"
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini extraction failed",
+        )
