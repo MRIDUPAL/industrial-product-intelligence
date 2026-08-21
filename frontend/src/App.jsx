@@ -9,16 +9,39 @@ function App() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`${API_URL}/products`)
-      .then((response) => {
+    async function loadProducts() {
+      try {
+        const response = await fetch(`${API_URL}/products`);
+
         if (!response.ok) {
           throw new Error("Could not load products");
         }
-        return response.json();
-      })
-      .then(setProducts)
-      .catch((error) => setError(error.message))
-      .finally(() => setLoading(false));
+
+        const productData = await response.json();
+
+        const productsWithEvidence = await Promise.all(
+          productData.map(async (product) => {
+            const evidenceResponse = await fetch(
+              `${API_URL}/products/${product.id}/evidence`
+            );
+
+            const evidence = evidenceResponse.ok
+              ? await evidenceResponse.json()
+              : [];
+
+            return { ...product, evidence };
+          })
+        );
+
+        setProducts(productsWithEvidence);
+      } catch (error) {
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProducts();
   }, []);
 
   return (
@@ -55,6 +78,23 @@ function App() {
                   )
                 )}
               </ul>
+              <h3>Evidence</h3>
+
+              {product.evidence?.length ? (
+                <ul>
+                  {product.evidence.map((item) => (
+                    <li key={item.id}>
+                      <strong>{item.field_name}:</strong> {item.value}
+                      <br />
+                      <a href={item.source_url} target="_blank" rel="noreferrer">
+                        View source
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No evidence recorded.</p>
+              )}
             </article>
           ))}
         </section>
