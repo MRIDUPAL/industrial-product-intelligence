@@ -12,6 +12,14 @@ from .schemas.product import ProductCreate
 from .models import Evidence, Product
 from .schemas.product import EvidenceCreate, ProductCreate
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
+
+from .schemas.product import (
+    EvidenceCreate,
+    IngestPreviewRequest,
+    ProductCreate,
+)
+from .services.ingestion import fetch_page
 
 app = FastAPI(
     title="Industrial Product Intelligence API",
@@ -150,3 +158,20 @@ def list_product_evidence(
         }
         for evidence in evidence_records
     ]
+
+@app.post("/ingest/preview")
+async def ingest_preview(request: IngestPreviewRequest):
+    try:
+        page = await fetch_page(str(request.url))
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not fetch the source URL",
+        )
+
+    return {
+        "url": page["url"],
+        "title": page["title"],
+        "character_count": len(page["text"]),
+        "text_preview": page["text"][:1000],
+    }

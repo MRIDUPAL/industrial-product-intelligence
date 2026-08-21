@@ -19,3 +19,6 @@ class EvidenceCreate(BaseModel):
     source_url: HttpUrl
     confidence: float | None = Field(default=None, ge=0, le=1)
     extraction_method: str | None = Field(default=None, max_length=100)
+
+class IngestPreviewRequest(BaseModel):
+    url: HttpUrl
