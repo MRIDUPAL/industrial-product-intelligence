@@ -202,3 +202,65 @@ async def extract_pdf_endpoint(
             status_code=502,
             detail="Gemini extraction failed",
         )
+
+@app.post("/ai/import-pdf")
+async def import_pdf(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+):
+    if file.content_type != "application/pdf":
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are supported",
+        )
+
+    pdf_bytes = await file.read()
+
+    try:
+        extraction = extract_pdf(pdf_bytes)
+    except RuntimeError as error:
+        raise HTTPException(status_code=500, detail=str(error))
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="Gemini extraction failed",
+        )
+
+    source_reference = f"uploaded://{file.filename or 'document.pdf'}"
+
+    product = Product(
+        brand=extraction.brand or "Unknown",
+        model=extraction.model or "Unknown",
+        name=extraction.name,
+        category=extraction.category,
+        description=extraction.description,
+        specifications={
+            item.key: item.value
+            for item in extraction.specifications
+        },
+        source_urls=[source_reference],
+    )
+
+    session.add(product)
+    session.flush()
+
+    for item in extraction.evidence:
+        session.add(
+            Evidence(
+                product_id=product.id,
+                field_name=item.field_name,
+                value=item.value,
+                source_url=item.source_url or source_reference,
+                extraction_method="gemini",
+            )
+        )
+
+    session.commit()
+    session.refresh(product)
+
+    return {
+        "product_id": product.id,
+        "name": product.name,
+        "evidence_count": len(extraction.evidence),
+        "status": "imported",
+    }
