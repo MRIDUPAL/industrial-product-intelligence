@@ -21,6 +21,11 @@ from .schemas.product import (
 )
 from .services.ingestion import fetch_page
 from .services.gemini_extractor import GeminiExtraction, extract_pdf
+from fastapi import UploadFile, File
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+
+from .services.dataset_processor import process_dataset
 
 app = FastAPI(
     title="Industrial Product Intelligence API",
@@ -203,6 +208,12 @@ async def extract_pdf_endpoint(
             detail="Gemini extraction failed",
         )
 
+from fastapi import UploadFile, File
+from fastapi.responses import StreamingResponse
+from io import BytesIO
+
+from .services.dataset_processor import process_dataset
+
 @app.post("/ai/import-pdf")
 async def import_pdf(
     file: UploadFile = File(...),
@@ -264,3 +275,37 @@ async def import_pdf(
         "evidence_count": len(extraction.evidence),
         "status": "imported",
     }
+
+@app.post("/datasets/process")
+async def process_dataset_file(file: UploadFile = File(...)):
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a CSV file.",
+        )
+
+    input_bytes = await file.read()
+
+    if not input_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is empty.",
+        )
+
+    try:
+        output_bytes = process_dataset(input_bytes)
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Dataset processing failed: {error}",
+        ) from error
+
+    return StreamingResponse(
+        BytesIO(output_bytes),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="industrial_product_output.csv"'
+            )
+        },
+    )

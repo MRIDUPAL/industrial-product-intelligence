@@ -35,7 +35,9 @@ function normalizeCategory(category) {
 function App() {
   const [products, setProducts] = useState([]);
   const [file, setFile] = useState(null);
+  const [datasetFile, setDatasetFile] = useState(null);
   const [status, setStatus] = useState("");
+  const [datasetStatus, setDatasetStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -126,18 +128,53 @@ function App() {
     }
   }
 
+  async function handleDatasetProcess(event) {
+    event.preventDefault();
+
+    if (!datasetFile) {
+      setDatasetStatus("Choose an input CSV first.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", datasetFile);
+    setDatasetStatus("Enriching product dataset...");
+
+    try {
+      const response = await fetch(`${API_URL}/datasets/process`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Dataset processing failed.");
+      }
+
+      const outputBlob = await response.blob();
+      const downloadUrl = URL.createObjectURL(outputBlob);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download = "industrial_product_output.csv";
+      link.click();
+
+      URL.revokeObjectURL(downloadUrl);
+      setDatasetStatus("Output dataset generated successfully.");
+    } catch (error) {
+      setDatasetStatus(error.message);
+    }
+  }
+
   const categories = [
     ...new Set(
-      products
-        .map((product) => normalizeCategory(product.category))
-        .filter(Boolean)
+      products.map((product) => normalizeCategory(product.category))
     ),
   ].sort();
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const search = searchTerm.trim().toLowerCase();
 
   const filteredProducts = products.filter((product) => {
-    const searchableText = [
+    const text = [
       product.name,
       product.brand,
       product.model,
@@ -147,13 +184,11 @@ function App() {
       .join(" ")
       .toLowerCase();
 
-    const matchesSearch = searchableText.includes(normalizedSearch);
-
-    const matchesCategory =
-      categoryFilter === "all" ||
-      normalizeCategory(product.category) === categoryFilter;
-
-    return matchesSearch && matchesCategory;
+    return (
+      text.includes(search) &&
+      (categoryFilter === "all" ||
+        normalizeCategory(product.category) === categoryFilter)
+    );
   });
 
   return (
@@ -179,6 +214,26 @@ function App() {
         </form>
 
         {status && <p>{status}</p>}
+      </section>
+
+      <section className="product-card import-card">
+       <h2>Enrich product dataset</h2>
+       <p>
+         Upload your input CSV and download the completed product catalog.
+       </p>
+
+        <form onSubmit={handleDatasetProcess}>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(event) =>
+              setDatasetFile(event.target.files?.[0] || null)
+            }
+          />
+          <button type="submit">Enrich and Download</button>
+        </form>
+
+        {datasetStatus && <p>{datasetStatus}</p>}
       </section>
 
       <section className="filters">
@@ -208,8 +263,6 @@ function App() {
 
       {loading ? (
         <p>Loading products...</p>
-      ) : filteredProducts.length === 0 ? (
-        <p className="empty-state">No matching products found.</p>
       ) : (
         <section className="product-grid">
           {filteredProducts.map((product) => {
@@ -248,17 +301,13 @@ function App() {
                     Specifications ({specifications.length})
                   </summary>
 
-                  {specifications.length > 0 ? (
-                    <ul>
-                      {specifications.map((item, index) => (
-                        <li key={`${item.key}-${index}`}>
-                          <strong>{item.key}:</strong> {String(item.value)}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>No specifications recorded.</p>
-                  )}
+                  <ul>
+                    {specifications.map((item, index) => (
+                      <li key={`${item.key}-${index}`}>
+                        <strong>{item.key}:</strong> {String(item.value)}
+                      </li>
+                    ))}
+                  </ul>
                 </details>
 
                 <details>
@@ -271,18 +320,6 @@ function App() {
                       {technicalEvidence.map((item) => (
                         <li key={item.id}>
                           <strong>{item.field_name}:</strong> {item.value}
-                          {item.source_url && (
-                            <>
-                              <br />
-                              <a
-                                href={item.source_url}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                View source
-                              </a>
-                            </>
-                          )}
                         </li>
                       ))}
                     </ul>
