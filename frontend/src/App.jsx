@@ -3,6 +3,14 @@ import "./App.css";
 
 const API_URL = "http://127.0.0.1:8000";
 
+const hiddenEvidenceFields = [
+  "brand",
+  "model",
+  "name",
+  "category",
+  "description",
+];
+
 function App() {
   const [products, setProducts] = useState([]);
   const [file, setFile] = useState(null);
@@ -84,9 +92,11 @@ function App() {
       }
 
       const result = await response.json();
+
       setStatus(
         `Imported ${result.name} with ${result.evidence_count} evidence records.`
       );
+
       setFile(null);
       await loadProducts();
     } catch (error) {
@@ -123,53 +133,74 @@ function App() {
         <p>Loading products...</p>
       ) : (
         <section className="product-grid">
-          {products.map((product) => (
-            <article className="product-card" key={product.id}>
-              <span className="category">
-                {product.category || "Uncategorized"}
-              </span>
+          {products.map((product) => {
+            const technicalEvidence = (product.evidence || []).filter(
+              (item) =>
+                !hiddenEvidenceFields.includes(
+                  item.field_name.toLowerCase()
+                )
+            );
 
-              <h2>{product.name}</h2>
+            return (
+              <article className="product-card" key={product.id}>
+                <span className="category">
+                  {product.category || "Uncategorized"}
+                </span>
 
-              <p className="brand">
-                {product.brand} · {product.model}
-              </p>
+                <h2>{product.name}</h2>
 
-              <p>{product.description || "No description available."}</p>
+                <p className="brand">
+                  {product.brand} · {product.model}
+                </p>
 
-              <h3>Specifications</h3>
-              <ul>
-                {Object.entries(product.specifications || {}).map(
-                  ([key, value]) => (
-                    <li key={key}>
-                      <strong>{key}:</strong> {String(value)}
-                    </li>
-                  )
-                )}
-              </ul>
+                <p>
+                  {product.description || "No description available."}
+                </p>
 
-              <h3>Evidence</h3>
-              {product.evidence?.length ? (
-                <ul>
-                  {product.evidence.map((item) => (
-                    <li key={item.id}>
-                      <strong>{item.field_name}:</strong> {item.value}
-                      <br />
-                      <a
-                        href={item.source_url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View source
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No evidence recorded.</p>
-              )}
-            </article>
-          ))}
+                <details>
+                  <summary>
+                    Specifications ({Object.keys(product.specifications || {}).length})
+                  </summary>
+
+                  <ul>
+                    {Object.entries(product.specifications || {}).map(
+                      ([key, value]) => (
+                        <li key={key}>
+                          <strong>{key}:</strong> {String(value)}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </details>
+
+                <details>
+                  <summary>
+                    Evidence ({technicalEvidence.length})
+                  </summary>
+
+                  {technicalEvidence.length > 0 ? (
+                    <ul>
+                      {technicalEvidence.map((item) => (
+                        <li key={item.id}>
+                          <strong>{item.field_name}:</strong> {item.value}
+                          <br />
+                          <a
+                            href={item.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View source
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No additional evidence recorded.</p>
+                  )}
+                </details>
+              </article>
+            );
+          })}
         </section>
       )}
     </main>
