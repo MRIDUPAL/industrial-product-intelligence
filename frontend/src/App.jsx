@@ -11,10 +11,31 @@ function App() {
 
   async function loadProducts() {
     const response = await fetch(`${API_URL}/products`);
+
+    if (!response.ok) {
+      throw new Error("Could not load products");
+    }
+
     const productData = await response.json();
 
+    const realProducts = productData.filter(
+      (product) =>
+        product.brand?.toLowerCase() !== "string" &&
+        product.model?.toLowerCase() !== "string" &&
+        product.name?.toLowerCase() !== "string"
+    );
+
+    const uniqueProducts = [
+      ...new Map(
+        realProducts.map((product) => [
+          `${product.brand}|${product.model}|${product.name}`,
+          product,
+        ])
+      ).values(),
+    ];
+
     const productsWithEvidence = await Promise.all(
-      productData.map(async (product) => {
+      uniqueProducts.map(async (product) => {
         const evidenceResponse = await fetch(
           `${API_URL}/products/${product.id}/evidence`
         );
