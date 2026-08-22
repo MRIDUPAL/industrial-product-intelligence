@@ -5,44 +5,73 @@ const API_URL = "http://127.0.0.1:8000";
 
 function App() {
   const [products, setProducts] = useState([]);
+  const [file, setFile] = useState(null);
+  const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
-  useEffect(() => {
-    async function loadProducts() {
-      try {
-        const response = await fetch(`${API_URL}/products`);
+  async function loadProducts() {
+    const response = await fetch(`${API_URL}/products`);
+    const productData = await response.json();
 
-        if (!response.ok) {
-          throw new Error("Could not load products");
-        }
-
-        const productData = await response.json();
-
-        const productsWithEvidence = await Promise.all(
-          productData.map(async (product) => {
-            const evidenceResponse = await fetch(
-              `${API_URL}/products/${product.id}/evidence`
-            );
-
-            const evidence = evidenceResponse.ok
-              ? await evidenceResponse.json()
-              : [];
-
-            return { ...product, evidence };
-          })
+    const productsWithEvidence = await Promise.all(
+      productData.map(async (product) => {
+        const evidenceResponse = await fetch(
+          `${API_URL}/products/${product.id}/evidence`
         );
 
-        setProducts(productsWithEvidence);
-      } catch (error) {
-        setError(error.message);
-      } finally {
-        setLoading(false);
-      }
+        return {
+          ...product,
+          evidence: evidenceResponse.ok
+            ? await evidenceResponse.json()
+            : [],
+        };
+      })
+    );
+
+    setProducts(productsWithEvidence);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadProducts().catch(() => {
+      setStatus("Could not load products.");
+      setLoading(false);
+    });
+  }, []);
+
+  async function handleImport(event) {
+    event.preventDefault();
+
+    if (!file) {
+      setStatus("Choose a PDF first.");
+      return;
     }
 
-    loadProducts();
-  }, []);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setStatus("Extracting PDF with Gemini...");
+
+    try {
+      const response = await fetch(`${API_URL}/ai/import-pdf`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("PDF import failed");
+      }
+
+      const result = await response.json();
+      setStatus(
+        `Imported ${result.name} with ${result.evidence_count} evidence records.`
+      );
+      setFile(null);
+      await loadProducts();
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
 
   return (
     <main className="dashboard">
@@ -50,22 +79,41 @@ function App() {
         <p className="eyebrow">Industrial Product Intelligence</p>
         <h1>Product catalog</h1>
         <p className="subtitle">
-          Structured products and traceable source information.
+          Extract, enrich, and trace industrial product information.
         </p>
       </header>
 
-      {loading && <p>Loading products...</p>}
-      {error && <p className="error">{error}</p>}
+      <section className="product-card">
+        <h2>Import product PDF</h2>
 
-      {!loading && !error && (
+        <form onSubmit={handleImport}>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(event) => setFile(event.target.files[0])}
+          />
+          <button type="submit">Import PDF</button>
+        </form>
+
+        {status && <p>{status}</p>}
+      </section>
+
+      {loading ? (
+        <p>Loading products...</p>
+      ) : (
         <section className="product-grid">
           {products.map((product) => (
             <article className="product-card" key={product.id}>
-              <span className="category">{product.category || "Uncategorized"}</span>
+              <span className="category">
+                {product.category || "Uncategorized"}
+              </span>
+
               <h2>{product.name}</h2>
+
               <p className="brand">
                 {product.brand} · {product.model}
               </p>
+
               <p>{product.description || "No description available."}</p>
 
               <h3>Specifications</h3>
@@ -78,15 +126,19 @@ function App() {
                   )
                 )}
               </ul>
-              <h3>Evidence</h3>
 
+              <h3>Evidence</h3>
               {product.evidence?.length ? (
                 <ul>
                   {product.evidence.map((item) => (
                     <li key={item.id}>
                       <strong>{item.field_name}:</strong> {item.value}
                       <br />
-                      <a href={item.source_url} target="_blank" rel="noreferrer">
+                      <a
+                        href={item.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         View source
                       </a>
                     </li>
