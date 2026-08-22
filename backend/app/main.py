@@ -26,6 +26,8 @@ from fastapi.responses import StreamingResponse
 from io import BytesIO
 
 from .services.dataset_processor import process_dataset
+import csv
+import io
 
 app = FastAPI(
     title="Industrial Product Intelligence API",
@@ -306,6 +308,65 @@ async def process_dataset_file(file: UploadFile = File(...)):
         headers={
             "Content-Disposition": (
                 'attachment; filename="industrial_product_output.csv"'
+            )
+        },
+    )
+
+@app.get("/datasets/export-catalog")
+def export_catalog(
+    session: Session = Depends(get_session),
+):
+    products = session.scalars(
+        select(Product).order_by(Product.id)
+    ).all()
+
+    expected_headers = load_expected_headers()
+    output_rows = []
+
+    for product in products:
+        row = {header: "" for header in expected_headers}
+
+        row["PART_NUMBER"] = product.model or ""
+        row["MANUFACTURER_PART_NUMBER"] = product.model or ""
+        row["Product Name"] = product.name or ""
+        row["Part_Desc"] = product.description or ""
+        row["BRAND_NAME"] = product.brand or ""
+        row["MANUFACTURER_NAME"] = product.brand or ""
+        row["Classpath"] = product.category or ""
+
+        if product.source_urls:
+            row["MFR URL"] = product.source_urls[0]
+
+        specifications = product.specifications or {}
+
+        for index, (key, value) in enumerate(
+            specifications.items(),
+            start=1,
+        ):
+            if index > 50:
+                break
+
+            row[f"ATTRIBUTE_LABEL {index}"] = str(key)
+            row[f"ATTRIBUTE_VALUE {index}"] = str(value)
+
+        output_rows.append(row)
+
+    output_buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        output_buffer,
+        fieldnames=expected_headers,
+        extrasaction="ignore",
+    )
+
+    writer.writeheader()
+    writer.writerows(output_rows)
+
+    return StreamingResponse(
+        BytesIO(output_buffer.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="saved_catalog.csv"'
             )
         },
     )

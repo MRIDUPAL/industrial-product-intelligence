@@ -250,3 +250,13 @@ details[open] summary::after {
     margin-left: 0;
   }
 }
+
+.export-button {
+  display: block;
+  margin: 20px 0 12px;
+  background: #134b2c;
+}
+
+.export-button:hover {
+  background: #102a43;
+}

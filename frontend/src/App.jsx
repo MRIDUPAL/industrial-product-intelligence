@@ -236,6 +236,14 @@ function App() {
         {datasetStatus && <p>{datasetStatus}</p>}
       </section>
 
+      <button
+        type="button"
+        className="export-button"
+        onClick={handleCatalogExport}
+      >
+        Download Saved Catalog
+      </button>
+
       <section className="filters">
         <input
           type="search"
@@ -334,6 +342,28 @@ function App() {
       )}
     </main>
   );
+
+  async function handleCatalogExport() {
+    try {
+      const response = await fetch(`${API_URL}/datasets/export-catalog`);
+
+      if (!response.ok) {
+        throw new Error("Catalog export failed.");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download = "saved_catalog.csv";
+      link.click();
+
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
 }
 
 export default App;
