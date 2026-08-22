@@ -29,6 +29,7 @@ def load_expected_headers() -> list[str]:
 
 def enrich_row(input_row: dict[str, Any]) -> dict[str, Any]:
     if not settings.gemini_api_key:
+        print("Gemini API key is missing.")
         return {}
 
     client = genai.Client(api_key=settings.gemini_api_key)
@@ -37,11 +38,21 @@ def enrich_row(input_row: dict[str, Any]) -> dict[str, Any]:
 You are an industrial product data enrichment system.
 
 Convert this source product row into structured catalog fields.
-Only return a valid JSON object.
-Do not invent uncertain values.
-Use empty strings for unavailable values.
 
-Source row:
+Return only a valid JSON object using these keys:
+- brand
+- model
+- name
+- category
+- description
+- specifications
+
+The specifications value must be a JSON object of key-value pairs.
+
+Do not invent uncertain values.
+Use empty strings or an empty object when unavailable.
+
+Source product row:
 {json.dumps(input_row, ensure_ascii=False)}
 """
 
@@ -53,12 +64,65 @@ Source row:
         ),
     )
 
+    raw_text = response.text.strip()
+
+    if raw_text.startswith("```"):
+        raw_text = raw_text.replace("```json", "")
+        raw_text = raw_text.replace("```", "")
+        raw_text = raw_text.strip()
+
     try:
-        result = json.loads(response.text)
+        result = json.loads(raw_text)
     except json.JSONDecodeError:
+        print("Could not parse Gemini response:", raw_text)
         return {}
 
+    print("Parsed enrichment:", result)
+
     return result if isinstance(result, dict) else {}
+
+
+def map_enriched_fields(
+    output_row: dict[str, Any],
+    enriched: dict[str, Any],
+) -> None:
+    output_row["BRAND_NAME"] = (
+        output_row["BRAND_NAME"]
+        or enriched.get("brand", "")
+    )
+
+    output_row["MANUFACTURER_PART_NUMBER"] = (
+        output_row["MANUFACTURER_PART_NUMBER"]
+        or enriched.get("model", "")
+    )
+
+    output_row["Product Name"] = (
+        output_row["Product Name"]
+        or enriched.get("name", "")
+    )
+
+    output_row["Classpath"] = (
+        output_row["Classpath"]
+        or enriched.get("category", "")
+    )
+
+    output_row["LONG_DESC1"] = (
+        output_row["LONG_DESC1"]
+        or enriched.get("description", "")
+    )
+
+    specifications = enriched.get("specifications", {})
+
+    if isinstance(specifications, dict):
+        for index, (key, value) in enumerate(
+            specifications.items(),
+            start=1,
+        ):
+            if index > 50:
+                break
+
+            output_row[f"ATTRIBUTE_LABEL {index}"] = str(key)
+            output_row[f"ATTRIBUTE_VALUE {index}"] = str(value)
 
 
 def process_dataset(input_bytes: bytes) -> bytes:
@@ -72,11 +136,12 @@ def process_dataset(input_bytes: bytes) -> bytes:
         enriched_values = enrich_row(input_row)
 
         output_row = {
-            header: enriched_values.get(header, "")
+            header: input_row.get(header, "")
             for header in expected_headers
         }
 
-        # Preserve original source values.
+        map_enriched_fields(output_row, enriched_values)
+
         output_row["PART_NUMBER"] = (
             output_row["PART_NUMBER"]
             or input_row.get("Mfg_Part_Num", "")
@@ -105,6 +170,7 @@ def process_dataset(input_bytes: bytes) -> bytes:
         output_rows.append(output_row)
 
     output_buffer = io.StringIO(newline="")
+
     writer = csv.DictWriter(
         output_buffer,
         fieldnames=expected_headers,
