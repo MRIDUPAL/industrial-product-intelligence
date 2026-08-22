@@ -157,3 +157,36 @@ summary::after {
 details[open] summary::after {
   content: "−";
 }
+
+.filters {
+  display: flex;
+  gap: 12px;
+  margin: 28px 0 10px;
+}
+
+.filters input,
+.filters select {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  color: #172033;
+  font: inherit;
+}
+
+.filters input {
+  flex: 1;
+}
+
+.result-count {
+  margin: 0 0 18px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 600px) {
+  .filters {
+    flex-direction: column;
+  }
+}
