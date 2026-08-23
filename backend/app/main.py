@@ -302,6 +302,18 @@ async def process_dataset_file(file: UploadFile = File(...)):
             detail=str(error),
         ) from error
     except Exception as error:
+        error_text = str(error)
+
+        if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    "Gemini quota reached. Please wait about one minute "
+                    "and try again."
+                ),
+                headers={"Retry-After": "60"},
+            ) from error
+
         raise HTTPException(
             status_code=500,
             detail="Unexpected dataset processing error.",

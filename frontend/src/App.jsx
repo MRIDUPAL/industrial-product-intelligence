@@ -11,6 +11,8 @@ const hiddenEvidenceFields = [
   "description",
 ];
 
+const [datasetProcessing, setDatasetProcessing] = useState(false);
+
 function normalizeCategory(category) {
   if (!category) return "Uncategorized";
 
@@ -136,9 +138,11 @@ function App() {
       return;
     }
 
+    setDatasetProcessing(true);
+    setDatasetStatus("Enriching product dataset...");
+
     const formData = new FormData();
     formData.append("file", datasetFile);
-    setDatasetStatus("Enriching product dataset...");
 
     try {
       const response = await fetch(`${API_URL}/datasets/process`, {
@@ -163,9 +167,14 @@ function App() {
       link.click();
 
       URL.revokeObjectURL(downloadUrl);
-      setDatasetStatus("Output dataset generated successfully.");
+
+      setDatasetStatus(
+        "Dataset enriched and downloaded successfully."
+      );
     } catch (error) {
       setDatasetStatus(error.message);
+    } finally {
+      setDatasetProcessing(false);
     }
   }
 
@@ -234,7 +243,9 @@ function App() {
               setDatasetFile(event.target.files?.[0] || null)
             }
           />
-          <button type="submit">Enrich and Download</button>
+          <button type="submit" disabled={datasetProcessing}>
+            {datasetProcessing ? "Processing..." : "Enrich and Download"}
+          </button>
         </form>
 
         {datasetStatus && <p>{datasetStatus}</p>}
