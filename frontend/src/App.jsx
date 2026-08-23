@@ -12,8 +12,6 @@ const hiddenEvidenceFields = [
   "description",
 ];
 
-const [datasetProcessing, setDatasetProcessing] = useState(false);
-
 function normalizeCategory(category) {
   if (!category) return "Uncategorized";
 
@@ -44,6 +42,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [datasetProcessing, setDatasetProcessing] = useState(false);
 
   async function loadProducts() {
     const response = await fetch(`${API_URL}/products`);
