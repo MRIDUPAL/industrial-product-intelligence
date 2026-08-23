@@ -27,19 +27,35 @@ def load_expected_headers() -> list[str]:
         return next(csv.reader(file))
 
 
-def enrich_row(input_row: dict[str, Any]) -> dict[str, Any]:
+def clean_json_response(text: str) -> str:
+    cleaned = text.strip()
+
+    if cleaned.startswith("```"):
+        cleaned = cleaned.replace("```json", "")
+        cleaned = cleaned.replace("```", "")
+        cleaned = cleaned.strip()
+
+    return cleaned
+
+
+def enrich_rows(
+    input_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     if not settings.gemini_api_key:
         print("Gemini API key is missing.")
-        return {}
+        return [{} for _ in input_rows]
 
     client = genai.Client(api_key=settings.gemini_api_key)
 
     prompt = f"""
 You are an industrial product data enrichment system.
 
-Convert this source product row into structured catalog fields.
+Process every product row below.
 
-Return only a valid JSON object using these keys:
+Return only a valid JSON array.
+Return exactly one object for each input row, in the same order.
+
+Each object must contain:
 - brand
 - model
 - name
@@ -52,8 +68,8 @@ The specifications value must be a JSON object of key-value pairs.
 Do not invent uncertain values.
 Use empty strings or an empty object when unavailable.
 
-Source product row:
-{json.dumps(input_row, ensure_ascii=False)}
+Input rows:
+{json.dumps(input_rows, ensure_ascii=False)}
 """
 
     response = client.models.generate_content(
@@ -64,22 +80,23 @@ Source product row:
         ),
     )
 
-    raw_text = response.text.strip()
-
-    if raw_text.startswith("```"):
-        raw_text = raw_text.replace("```json", "")
-        raw_text = raw_text.replace("```", "")
-        raw_text = raw_text.strip()
+    raw_text = clean_json_response(response.text)
 
     try:
         result = json.loads(raw_text)
     except json.JSONDecodeError:
-        print("Could not parse Gemini response:", raw_text)
-        return {}
+        print("Could not parse batch response:", raw_text)
+        return [{} for _ in input_rows]
 
-    print("Parsed enrichment:", result)
+    if not isinstance(result, list):
+        return [{} for _ in input_rows]
 
-    return result if isinstance(result, dict) else {}
+    print(f"Enriched {len(result)} rows in one Gemini request.")
+
+    return [
+        item if isinstance(item, dict) else {}
+        for item in result
+    ]
 
 
 def map_enriched_fields(
@@ -128,13 +145,17 @@ def map_enriched_fields(
 def process_dataset(input_bytes: bytes) -> bytes:
     input_text = input_bytes.decode("utf-8-sig")
     input_reader = csv.DictReader(io.StringIO(input_text))
+
+    input_rows = list(input_reader)
     expected_headers = load_expected_headers()
+    enriched_rows = enrich_rows(input_rows)
 
     output_rows = []
 
-    for input_row in input_reader:
-        enriched_values = enrich_row(input_row)
-
+    for input_row, enriched_values in zip(
+        input_rows,
+        enriched_rows,
+    ):
         output_row = {
             header: input_row.get(header, "")
             for header in expected_headers
