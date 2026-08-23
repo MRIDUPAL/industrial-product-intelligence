@@ -26,6 +26,30 @@ def load_expected_headers() -> list[str]:
     ) as file:
         return next(csv.reader(file))
 
+def validate_output(
+    output_rows: list[dict[str, Any]],
+    expected_headers: list[str],
+    input_row_count: int,
+) -> None:
+    if len(expected_headers) != 252:
+        raise ValueError(
+            f"Expected 252 output headers, found {len(expected_headers)}."
+        )
+
+    if len(output_rows) != input_row_count:
+        raise ValueError(
+            "Output row count does not match input row count."
+        )
+
+    for index, row in enumerate(output_rows, start=1):
+        missing_headers = [
+            header for header in expected_headers if header not in row
+        ]
+
+        if missing_headers:
+            raise ValueError(
+                f"Row {index} is missing required output headers."
+            )
 
 def clean_json_response(text: str) -> str:
     cleaned = text.strip()
@@ -145,6 +169,9 @@ def map_enriched_fields(
 def process_dataset(input_bytes: bytes) -> bytes:
     input_text = input_bytes.decode("utf-8-sig")
     input_reader = csv.DictReader(io.StringIO(input_text))
+    
+    input_headers = input_reader.fieldnames or []
+    validate_input_headers(input_headers)
 
     input_rows = list(input_reader)
     expected_headers = load_expected_headers()
@@ -190,6 +217,12 @@ def process_dataset(input_bytes: bytes) -> bytes:
 
         output_rows.append(output_row)
 
+    validate_output(
+        output_rows,
+        expected_headers,
+        len(input_rows),
+    )
+
     output_buffer = io.StringIO(newline="")
 
     writer = csv.DictWriter(
@@ -202,3 +235,24 @@ def process_dataset(input_bytes: bytes) -> bytes:
     writer.writerows(output_rows)
 
     return output_buffer.getvalue().encode("utf-8-sig")
+
+REQUIRED_INPUT_HEADERS = {
+    "Mfg_Part_Num",
+    "Part_Desc",
+    "E1_Brand",
+    "Unilog_Brand",
+    "DIB_Brand",
+    "Part_Manuf",
+}
+
+def validate_input_headers(
+    input_headers: list[str],
+) -> None:
+    missing_headers = REQUIRED_INPUT_HEADERS - set(input_headers)
+
+    if missing_headers:
+        missing = ", ".join(sorted(missing_headers))
+
+        raise ValueError(
+            f"Invalid input CSV. Missing required columns: {missing}"
+        )

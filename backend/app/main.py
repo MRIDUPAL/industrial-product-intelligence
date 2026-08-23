@@ -296,10 +296,15 @@ async def process_dataset_file(file: UploadFile = File(...)):
 
     try:
         output_bytes = process_dataset(input_bytes)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
     except Exception as error:
         raise HTTPException(
             status_code=500,
-            detail=f"Dataset processing failed: {error}",
+            detail="Unexpected dataset processing error.",
         ) from error
 
     return StreamingResponse(

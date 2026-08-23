@@ -147,7 +147,11 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error("Dataset processing failed.");
+        const errorBody = await response.json().catch(() => null);
+
+        throw new Error(
+          errorBody?.detail || "Dataset processing failed."
+        );
       }
 
       const outputBlob = await response.blob();
